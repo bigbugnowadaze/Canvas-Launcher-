@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#09090b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Canvas Launcher">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>Canvas Launcher — Make Any Gemini Canvas a Mobile App</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -828,52 +834,14 @@ function generateIconDataURL(size) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// PWA — MANIFEST + META INJECTION
+// PWA MANIFEST — static file, already linked in <head>
+// Just update the page title dynamically for the viewer
 // ─────────────────────────────────────────────────────────────
 function injectPWAManifest(appName) {
-  const icon192 = generateIconDataURL(192);
-  const icon512 = generateIconDataURL(512);
-
-  const manifest = {
-    name: appName,
-    short_name: appName.substring(0, 12),
-    description: `Launch ${appName} — a Gemini Canvas`,
-    start_url: window.location.href,
-    display: 'standalone',
-    background_color: '#09090b',
-    theme_color: '#09090b',
-    orientation: 'portrait-primary',
-    icons: [
-      { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-      { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
-    ]
-  };
-
-  const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const link = document.createElement('link');
-  link.rel = 'manifest'; link.href = url;
-  document.head.appendChild(link);
-
-  // Apple meta
-  const metas = [
-    ['apple-mobile-web-app-capable', 'yes'],
-    ['apple-mobile-web-app-status-bar-style', 'black-translucent'],
-    ['apple-mobile-web-app-title', appName],
-    ['mobile-web-app-capable', 'yes'],
-  ];
-  metas.forEach(([name, content]) => {
-    const m = document.createElement('meta');
-    m.name = name; m.content = content;
-    document.head.appendChild(m);
-  });
-
-  if (icon192) {
-    const iconLink = document.createElement('link');
-    iconLink.rel = 'apple-touch-icon';
-    iconLink.href = icon192;
-    document.head.appendChild(iconLink);
-  }
+  // Static manifest.json handles install eligibility.
+  // We just update apple meta title dynamically.
+  const existing = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+  if (existing) existing.content = appName;
 }
 
 // ─────────────────────────────────────────────────────────────
