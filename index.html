@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#09090b">
+<title>Canvas Launcher — Make Any Gemini Canvas a Mobile App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --z950: #09090b;
+    --z900: #18181b;
+    --z800: #27272a;
+    --z700: #3f3f46;
+    --z600: #52525b;
+    --z500: #71717a;
+    --z400: #a1a1aa;
+    --z300: #d4d4d8;
+    --z200: #e4e4e7;
+    --z100: #f4f4f5;
+    --blue: #3b82f6;
+    --blue-dark: #2563eb;
+    --purple: #7c3aed;
+    --emerald: #10b981;
+    --red: #ef4444;
+    --font-mono: 'DM Mono', 'Courier New', monospace;
+    --font-display: 'Syne', sans-serif;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--z950);
+    color: var(--z200);
+    font-family: var(--font-mono);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* GRAIN OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.6;
+  }
+
+  /* ===================== ANIMATIONS ===================== */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(59,130,246,0.15); }
+    50%       { box-shadow: 0 0 40px rgba(59,130,246,0.3); }
+  }
+  @keyframes drift1 {
+    0%   { transform: translate(0,0) scale(1); }
+    100% { transform: translate(30px, -20px) scale(1.08); }
+  }
+  @keyframes drift2 {
+    0%   { transform: translate(0,0) scale(1); }
+    100% { transform: translate(-20px, 30px) scale(1.06); }
+  }
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes underline-grow {
+    from { width: 0; }
+    to   { width: 100%; }
+  }
+  @keyframes dot-blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+
+  .anim-0  { animation: fadeUp 500ms cubic-bezier(0.16,1,0.3,1) 0ms   both; }
+  .anim-1  { animation: fadeUp 500ms cubic-bezier(0.16,1,0.3,1) 80ms  both; }
+  .anim-2  { animation: fadeUp 500ms cubic-bezier(0.16,1,0.3,1) 160ms both; }
+  .anim-3  { animation: fadeUp 500ms cubic-bezier(0.16,1,0.3,1) 240ms both; }
+  .anim-4  { animation: fadeUp 500ms cubic-bezier(0.16,1,0.3,1) 320ms both; }
+  .anim-5  { animation: fadeUp 500ms cubic-bezier(0.16,1,0.3,1) 400ms both; }
+
+  /* ===================== LAYOUT ===================== */
+  #input-mode, #viewer-mode {
+    min-height: 100vh;
+    display: none;
+    flex-direction: column;
+  }
+
+  /* ===================== NAV ===================== */
+  .nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    background: rgba(9,9,11,0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    z-index: 100;
+  }
+  .nav-brand {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--z500);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .nav-glyph { color: var(--blue); font-size: 14px; }
+  .nav-ver {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--z700);
+    letter-spacing: 0.1em;
+  }
+
+  /* ===================== INPUT MODE ===================== */
+  #input-mode {
+    padding: 80px 20px 60px;
+    max-width: 600px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .hero { margin-bottom: 40px; }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--z600);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .h1-line1 {
+    font-family: var(--font-mono);
+    font-weight: 300;
+    font-size: clamp(36px, 10vw, 52px);
+    color: var(--z300);
+    line-height: 1.1;
+    display: block;
+  }
+  .h1-line2 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(36px, 10vw, 52px);
+    line-height: 1.1;
+    display: block;
+    background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .h1-line3 {
+    font-family: var(--font-mono);
+    font-weight: 300;
+    font-size: clamp(22px, 6vw, 32px);
+    color: var(--z500);
+    line-height: 1.2;
+    display: block;
+    margin-top: 4px;
+  }
+  .subhead {
+    margin-top: 16px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--z500);
+    line-height: 1.7;
+    max-width: 340px;
+  }
+
+  /* INPUT CARD */
+  .input-card {
+    border: 1px solid var(--z800);
+    background: rgba(24,24,27,0.6);
+    padding: 24px;
+    margin-bottom: 12px;
+  }
+  .field-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--z600);
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .url-wrap { position: relative; }
+  textarea#canvas-url {
+    width: 100%;
+    height: 80px;
+    resize: none;
+    background: var(--z950);
+    border: 1px solid var(--z700);
+    border-radius: 0;
+    color: var(--z200);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 12px;
+    outline: none;
+    transition: border-color 150ms ease;
+    line-height: 1.6;
+  }
+  textarea#canvas-url::placeholder { color: var(--z700); }
+  textarea#canvas-url:focus { border-color: var(--blue); }
+  textarea#canvas-url.valid   { border-color: #10b981; }
+  textarea#canvas-url.invalid { border-color: #ef4444; }
+
+  .status-dot {
+    position: absolute;
+    top: 10px; right: 10px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: none;
+  }
+  .status-dot.valid   { background: var(--emerald); display: block; animation: dot-blink 2s ease infinite; }
+  .status-dot.invalid { background: var(--red);     display: block; }
+
+  .drag-hint {
+    font-size: 10px;
+    color: var(--z700);
+    margin-top: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  .divider { border: none; border-top: 1px solid var(--z800); margin: 20px 0; }
+
+  .name-wrap { position: relative; }
+  input#app-name {
+    width: 100%;
+    background: var(--z950);
+    border: 1px solid var(--z700);
+    border-radius: 0;
+    color: var(--z200);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 150ms ease;
+  }
+  input#app-name::placeholder { color: var(--z700); }
+  input#app-name:focus { border-color: var(--blue); }
+
+  .char-count {
+    text-align: right;
+    font-size: 10px;
+    color: var(--z700);
+    margin-top: 5px;
+    letter-spacing: 0.05em;
+  }
+  .char-count.over { color: var(--red); }
+
+  /* CREATE BUTTON */
+  #create-btn {
+    width: 100%;
+    height: 56px;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: all 150ms ease;
+    border-radius: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  #create-btn:not(:disabled) {
+    background: var(--blue-dark);
+    color: #fff;
+  }
+  #create-btn:not(:disabled):hover {
+    background: var(--blue);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(59,130,246,0.3);
+  }
+  #create-btn:not(:disabled):active {
+    transform: scale(0.99) translateY(0);
+    background: #1d4ed8;
+  }
+  #create-btn:disabled {
+    background: var(--z800);
+    color: var(--z600);
+    cursor: not-allowed;
+  }
+
+  /* SUCCESS STATE */
+  #success-state {
+    display: none;
+    animation: fadeUp 300ms cubic-bezier(0.16,1,0.3,1) both;
+  }
+  .success-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .success-check { font-size: 24px; color: var(--emerald); }
+  .success-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--z300);
+  }
+  .url-display {
+    background: var(--z950);
+    border: 1px solid var(--z800);
+    padding: 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #60a5fa;
+    word-break: break-all;
+    line-height: 1.6;
+    position: relative;
+    margin-bottom: 12px;
+  }
+  .copy-again {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--z600);
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-underline-offset: 3px;
+    background: none;
+    border: none;
+    font-family: var(--font-mono);
+  }
+  .copy-again:hover { color: var(--z400); }
+  .success-sub {
+    font-size: 11px;
+    color: var(--z600);
+    line-height: 1.7;
+    margin-bottom: 16px;
+  }
+  .reset-link {
+    background: none;
+    border: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--z600);
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-underline-offset: 3px;
+    letter-spacing: 0.05em;
+  }
+  .reset-link:hover { color: var(--z400); }
+
+  /* FOOTER */
+  .input-footer {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--z900);
+  }
+  .footer-eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--z700);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .footer-line {
+    font-size: 11px;
+    color: var(--z700);
+    line-height: 2;
+    display: block;
+  }
+
+  /* ===================== VIEWER MODE ===================== */
+  #viewer-mode {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    padding-bottom: env(safe-area-inset-bottom, 24px);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Animated background gradients */
+  .bg-grad {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .bg-grad::before {
+    content: '';
+    position: absolute;
+    width: 70vw; height: 70vw;
+    top: -10%; left: -10%;
+    background: radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%);
+    animation: drift1 25s ease-in-out infinite alternate;
+  }
+  .bg-grad::after {
+    content: '';
+    position: absolute;
+    width: 60vw; height: 60vw;
+    bottom: 0; right: -10%;
+    background: radial-gradient(circle, rgba(124,58,237,0.10) 0%, transparent 70%);
+    animation: drift2 30s ease-in-out infinite alternate;
+  }
+
+  .viewer-content {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    justify-content: space-between;
+    padding: 70px 0 24px;
+  }
+
+  /* STATUS BAR */
+  .viewer-status {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    background: rgba(9,9,11,0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    z-index: 100;
+  }
+  .viewer-status-brand {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--z600);
+  }
+  .viewer-status-time {
+    font-size: 11px;
+    color: var(--z600);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* APP NAME */
+  .viewer-app-section {
+    text-align: center;
+    width: 100%;
+  }
+  .viewer-eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--z600);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .viewer-app-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(24px, 6vw, 36px);
+    color: var(--z100);
+    line-height: 1.2;
+    position: relative;
+    display: inline-block;
+  }
+  .viewer-app-name::after {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #60a5fa, #a78bfa);
+    animation: underline-grow 600ms cubic-bezier(0.16,1,0.3,1) 400ms both;
+  }
+
+  /* QR SECTION */
+  .viewer-qr-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .qr-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--z600);
+    text-transform: uppercase;
+  }
+  #qr-container {
+    border: 1px solid var(--z800);
+    padding: 16px;
+    background: var(--z950);
+    animation: pulse-glow 4s ease-in-out infinite;
+  }
+  #qr-container canvas, #qr-container img { display: block; }
+  .qr-caption {
+    font-size: 11px;
+    color: var(--z700);
+    letter-spacing: 0.05em;
+  }
+
+  /* ACTION BUTTONS */
+  .viewer-actions {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #launch-btn {
+    width: 100%;
+    height: 64px;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.03em;
+    color: #fff;
+    border-radius: 0;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+    transition: filter 150ms ease, transform 150ms ease;
+  }
+  #launch-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+    background-size: 200% auto;
+    animation: shimmer 3s linear infinite;
+  }
+  #launch-btn:hover  { filter: brightness(1.12); transform: translateY(-1px); }
+  #launch-btn:active { transform: scale(0.99); filter: brightness(0.95); }
+  #launch-btn span   { position: relative; z-index: 1; }
+
+  #install-btn {
+    width: 100%;
+    height: 52px;
+    background: transparent;
+    border: 1px solid var(--z600);
+    color: var(--z300);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 0;
+    letter-spacing: 0.05em;
+    transition: border-color 150ms ease, color 150ms ease;
+    display: none;
+  }
+  #install-btn:hover { border-color: var(--blue); color: #fff; }
+
+  /* iOS hint */
+  #ios-hint {
+    display: none;
+    border: 1px solid var(--z800);
+    background: rgba(24,24,27,0.6);
+    padding: 14px 16px;
+    font-size: 12px;
+    color: var(--z400);
+    line-height: 1.7;
+    text-align: center;
+  }
+
+  .viewer-footer {
+    font-size: 10px;
+    color: var(--z800);
+    letter-spacing: 0.1em;
+    padding-bottom: 8px;
+  }
+
+  /* ===================== CLIPBOARD FALLBACK ===================== */
+  #clipboard-fallback {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(9,9,11,0.92);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  #clipboard-fallback.show { display: flex; }
+  .fallback-card {
+    background: var(--z900);
+    border: 1px solid var(--z700);
+    padding: 24px;
+    max-width: 400px;
+    width: 100%;
+  }
+  .fallback-card h3 {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--z400);
+    margin-bottom: 14px;
+  }
+  .fallback-card textarea {
+    width: 100%;
+    height: 80px;
+    background: var(--z950);
+    border: 1px solid var(--z700);
+    color: var(--z200);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 10px;
+    resize: none;
+    margin-bottom: 14px;
+    border-radius: 0;
+    outline: none;
+  }
+  .fallback-close {
+    background: var(--z700);
+    border: none;
+    color: var(--z200);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 10px 20px;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    border-radius: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- Clipboard fallback overlay -->
+<div id="clipboard-fallback">
+  <div class="fallback-card">
+    <h3>SELECT ALL & COPY THIS LINK</h3>
+    <textarea id="fallback-textarea" readonly></textarea>
+    <button class="fallback-close" onclick="document.getElementById('clipboard-fallback').classList.remove('show')">CLOSE ✕</button>
+  </div>
+</div>
+
+<!-- ==================== INPUT MODE ==================== -->
+<div id="input-mode">
+  <nav class="nav">
+    <div class="nav-brand"><span class="nav-glyph">◈</span> CANVAS LAUNCHER</div>
+    <div class="nav-ver">v2.0</div>
+  </nav>
+
+  <div class="hero anim-0">
+    <p class="eyebrow">Mobile PWA Launcher</p>
+    <span class="h1-line1">Gemini</span>
+    <span class="h1-line2">Canvas</span>
+    <span class="h1-line3">→ Your Phone</span>
+    <p class="subhead">Paste any Gemini Canvas share link. Get a URL that installs it as a real app on any phone.</p>
+  </div>
+
+  <div class="input-card anim-2">
+    <label class="field-label" for="canvas-url">Canvas Link</label>
+    <div class="url-wrap">
+      <textarea id="canvas-url" placeholder="https://gemini.google.com/share/..." spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+      <div class="status-dot" id="status-dot"></div>
+    </div>
+    <p class="drag-hint">or drag a link here</p>
+
+    <hr class="divider">
+
+    <label class="field-label" for="app-name">App Name (Optional)</label>
+    <div class="name-wrap">
+      <input type="text" id="app-name" placeholder="My Canvas App" maxlength="40" autocomplete="off">
+    </div>
+    <div class="char-count" id="char-count">0 / 40</div>
+  </div>
+
+  <div class="anim-3">
+    <button id="create-btn" disabled>Create Mobile Web App Link →</button>
+  </div>
+
+  <div id="success-state" class="anim-3">
+    <div class="success-header">
+      <span class="success-check">✓</span>
+      <span class="success-label">LINK COPIED TO CLIPBOARD</span>
+    </div>
+    <div class="url-display" id="generated-url-display"></div>
+    <button class="copy-again" id="copy-again-btn">📋 Copy again</button>
+    <p class="success-sub">Send this link to anyone. When opened on mobile, they can install it as an app.</p>
+    <button class="reset-link" id="reset-btn">← Create another</button>
+  </div>
+
+  <div class="input-footer anim-5">
+    <p class="footer-eyebrow">Why this exists</p>
+    <span class="footer-line">◈&nbsp;&nbsp;Gemini mobile app can't open shared Canvases</span>
+    <span class="footer-line">◈&nbsp;&nbsp;This wraps any Canvas link as an installable PWA</span>
+    <span class="footer-line">◈&nbsp;&nbsp;Zero backend. Zero tracking. Pure URL magic.</span>
+  </div>
+</div>
+
+<!-- ==================== VIEWER MODE ==================== -->
+<div id="viewer-mode">
+  <div class="bg-grad"></div>
+
+  <div class="viewer-status">
+    <div class="viewer-status-brand"><span style="color:var(--blue)">◈</span> CANVAS LAUNCHER</div>
+    <div class="viewer-status-time" id="status-time">--:--</div>
+  </div>
+
+  <div class="viewer-content">
+    <div class="viewer-app-section anim-0">
+      <p class="viewer-eyebrow">Gemini Canvas</p>
+      <div class="viewer-app-name" id="viewer-app-name">Canvas App</div>
+    </div>
+
+    <div class="viewer-qr-section anim-2">
+      <p class="qr-label">Scan to Share</p>
+      <div id="qr-container"></div>
+      <p class="qr-caption">This URL is the launcher</p>
+    </div>
+
+    <div class="viewer-actions anim-3">
+      <button id="launch-btn"><span>🚀 Launch Canvas</span></button>
+      <button id="install-btn">📱 Install as App</button>
+      <div id="ios-hint">To install on iOS: tap <strong>⬆️ Share</strong> → <strong>Add to Home Screen</strong></div>
+      <div id="install-hint" style="display:none; border:1px solid var(--z800); background:rgba(24,24,27,0.6); padding:14px 16px; font-size:11px; color:var(--z400); line-height:1.8; text-align:center;">
+        Can't see the install prompt?<br>
+        In Chrome: tap <strong>⋮ menu</strong> → <strong>Add to Home screen</strong>
+      </div>
+    </div>
+
+    <div class="viewer-footer anim-5">Made with ◈ Canvas Launcher</div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// UTILITIES
+// ─────────────────────────────────────────────────────────────
+const CANVAS_REGEX = /^https?:\/\/(gemini\.google\.com\/share\/|g\.co\/gemini\/share\/)[\w-]+/;
+
+function isValidCanvasURL(url) {
+  return CANVAS_REGEX.test(url.trim());
+}
+
+function getCleanPageURL() {
+  return window.location.origin + window.location.pathname;
+}
+
+function buildLauncherURL(canvasURL, appName) {
+  const base = getCleanPageURL();
+  const params = new URLSearchParams();
+  params.set('canvas', canvasURL.trim());
+  if (appName && appName.trim()) params.set('name', appName.trim());
+  return `${base}?${params.toString()}`;
+}
+
+async function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try { await navigator.clipboard.writeText(text); return true; } catch(e) {}
+  }
+  // Fallback
+  const ta = document.getElementById('fallback-textarea');
+  ta.value = text;
+  document.getElementById('clipboard-fallback').classList.add('show');
+  ta.focus(); ta.select();
+  return false;
+}
+
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+function isInStandaloneMode() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+// ─────────────────────────────────────────────────────────────
+// ICON GENERATION
+// ─────────────────────────────────────────────────────────────
+function generateIconDataURL(size) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+
+    ctx.fillStyle = '#09090b';
+    ctx.fillRect(0,0,size,size);
+
+    const g = ctx.createLinearGradient(size*0.15, size*0.15, size*0.85, size*0.85);
+    g.addColorStop(0, '#3b82f6');
+    g.addColorStop(1, '#7c3aed');
+    ctx.fillStyle = g;
+    const r = size * 0.18;
+    const x = size*0.15, y = size*0.15, w = size*0.7, h = size*0.7;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${size * 0.38}px 'Syne', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('G', size/2, size/2 + size*0.02);
+
+    return c.toDataURL('image/png');
+  } catch(e) { return ''; }
+}
+
+// ─────────────────────────────────────────────────────────────
+// PWA — MANIFEST + META INJECTION
+// ─────────────────────────────────────────────────────────────
+function injectPWAManifest(appName) {
+  const icon192 = generateIconDataURL(192);
+  const icon512 = generateIconDataURL(512);
+
+  const manifest = {
+    name: appName,
+    short_name: appName.substring(0, 12),
+    description: `Launch ${appName} — a Gemini Canvas`,
+    start_url: window.location.href,
+    display: 'standalone',
+    background_color: '#09090b',
+    theme_color: '#09090b',
+    orientation: 'portrait-primary',
+    icons: [
+      { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+      { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+    ]
+  };
+
+  const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement('link');
+  link.rel = 'manifest'; link.href = url;
+  document.head.appendChild(link);
+
+  // Apple meta
+  const metas = [
+    ['apple-mobile-web-app-capable', 'yes'],
+    ['apple-mobile-web-app-status-bar-style', 'black-translucent'],
+    ['apple-mobile-web-app-title', appName],
+    ['mobile-web-app-capable', 'yes'],
+  ];
+  metas.forEach(([name, content]) => {
+    const m = document.createElement('meta');
+    m.name = name; m.content = content;
+    document.head.appendChild(m);
+  });
+
+  if (icon192) {
+    const iconLink = document.createElement('link');
+    iconLink.rel = 'apple-touch-icon';
+    iconLink.href = icon192;
+    document.head.appendChild(iconLink);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// SERVICE WORKER — register /sw.js (deployed alongside index.html)
+// ─────────────────────────────────────────────────────────────
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    .then(reg => console.log('SW registered, scope:', reg.scope))
+    .catch(err => console.warn('SW registration failed:', err));
+}
+
+// ─────────────────────────────────────────────────────────────
+// INSTALL PROMPT
+// ─────────────────────────────────────────────────────────────
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const btn = document.getElementById('install-btn');
+  if (btn) {
+    btn.style.display = 'block';
+    btn.textContent = '📱 Install as App';
+    btn.style.borderColor = 'var(--blue)';
+    btn.style.color = '#fff';
+  }
+  const hint = document.getElementById('install-hint');
+  if (hint) hint.style.display = 'none';
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredPrompt = null;
+  const btn = document.getElementById('install-btn');
+  if (btn) {
+    btn.textContent = '✓ Installed — check your home screen';
+    btn.style.borderColor = '#10b981';
+    btn.style.color = '#10b981';
+    btn.disabled = true;
+  }
+});
+
+document.getElementById('install-btn').addEventListener('click', () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(r => {
+    deferredPrompt = null;
+    if (r.outcome === 'dismissed') {
+      const hint = document.getElementById('install-hint');
+      if (hint) hint.style.display = 'block';
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// LIVE CLOCK
+// ─────────────────────────────────────────────────────────────
+function startClock() {
+  const el = document.getElementById('status-time');
+  if (!el) return;
+  function tick() {
+    const now = new Date();
+    el.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+// ─────────────────────────────────────────────────────────────
+// VIEWER MODE
+// ─────────────────────────────────────────────────────────────
+function showViewerMode(canvasURL, appName) {
+  document.getElementById('input-mode').style.display  = 'none';
+  document.getElementById('viewer-mode').style.display = 'flex';
+  document.title = `${appName} — Gemini Canvas`;
+
+  document.getElementById('viewer-app-name').textContent = appName;
+
+  // QR code
+  const qrEl = document.getElementById('qr-container');
+  try {
+    new QRCode(qrEl, {
+      text: window.location.href,
+      width: 200, height: 200,
+      colorDark: '#e4e4e7',
+      colorLight: '#09090b',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } catch(e) {
+    qrEl.textContent = 'QR unavailable — share the URL manually';
+    qrEl.style.padding = '20px';
+    qrEl.style.color = 'var(--z500)';
+    qrEl.style.fontSize = '12px';
+  }
+
+  // Launch button
+  document.getElementById('launch-btn').addEventListener('click', () => {
+    window.open(canvasURL, '_blank');
+  });
+
+  // iOS hint
+  if (isIOS() && !isInStandaloneMode()) {
+    document.getElementById('ios-hint').style.display = 'block';
+  }
+
+  // PWA setup
+  injectPWAManifest(appName);
+  registerServiceWorker();
+  startClock();
+}
+
+// ─────────────────────────────────────────────────────────────
+// INPUT MODE
+// ─────────────────────────────────────────────────────────────
+function showInputMode() {
+  document.getElementById('input-mode').style.display  = 'flex';
+  document.getElementById('viewer-mode').style.display = 'none';
+  document.title = 'Canvas Launcher — Make Any Gemini Canvas a Mobile App';
+  setupInputMode();
+}
+
+let generatedURL = '';
+
+function setupInputMode() {
+  const ta      = document.getElementById('canvas-url');
+  const nameIn  = document.getElementById('app-name');
+  const btn     = document.getElementById('create-btn');
+  const dot     = document.getElementById('status-dot');
+  const counter = document.getElementById('char-count');
+  const successEl = document.getElementById('success-state');
+  const urlDisplay = document.getElementById('generated-url-display');
+
+  function validate() {
+    const val = ta.value.trim();
+    if (!val) {
+      ta.className = '';
+      dot.className = 'status-dot';
+      btn.disabled = true;
+      return false;
+    }
+    const ok = isValidCanvasURL(val);
+    ta.className = ok ? 'valid' : 'invalid';
+    dot.className = ok ? 'status-dot valid' : 'status-dot invalid';
+    btn.disabled = !ok;
+    return ok;
+  }
+
+  ta.addEventListener('input', validate);
+  ta.addEventListener('paste', () => setTimeout(validate, 50));
+
+  // Drag and drop
+  ta.addEventListener('dragover', e => { e.preventDefault(); ta.style.borderColor = '#3b82f6'; });
+  ta.addEventListener('dragleave', () => { ta.style.borderColor = ''; validate(); });
+  ta.addEventListener('drop', e => {
+    e.preventDefault();
+    ta.style.borderColor = '';
+    const text = e.dataTransfer.getData('text');
+    if (text) { ta.value = text; validate(); }
+  });
+
+  // Char counter
+  nameIn.addEventListener('input', () => {
+    const len = nameIn.value.length;
+    counter.textContent = `${len} / 40`;
+    counter.className = len >= 40 ? 'char-count over' : 'char-count';
+  });
+
+  // Create button
+  btn.addEventListener('click', async () => {
+    if (!validate()) return;
+    const canvasURL = ta.value.trim();
+    const appName   = nameIn.value.trim() || 'Canvas App';
+    generatedURL = buildLauncherURL(canvasURL, appName);
+
+    const copied = await copyToClipboard(generatedURL);
+
+    btn.style.display = 'none';
+    urlDisplay.textContent = generatedURL;
+    successEl.style.display = 'block';
+
+    if (!copied) {
+      // Already showing fallback modal
+    }
+  });
+
+  // Copy again
+  document.getElementById('copy-again-btn').addEventListener('click', async () => {
+    await copyToClipboard(generatedURL);
+    const b = document.getElementById('copy-again-btn');
+    b.textContent = '✓ Copied!';
+    setTimeout(() => { b.textContent = '📋 Copy again'; }, 2000);
+  });
+
+  // Reset
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    ta.value = '';
+    nameIn.value = '';
+    counter.textContent = '0 / 40';
+    ta.className = '';
+    dot.className = 'status-dot';
+    btn.disabled = true;
+    btn.style.display = '';
+    successEl.style.display = 'none';
+    generatedURL = '';
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────────
+(function boot() {
+  const params    = new URLSearchParams(window.location.search);
+  const canvasURL = params.get('canvas');
+  const appName   = params.get('name') || 'Canvas App';
+
+  if (canvasURL && isValidCanvasURL(canvasURL)) {
+    showViewerMode(canvasURL, appName);
+  } else {
+    showInputMode();
+  }
+})();
+</script>
+</body>
+</html>
